@@ -4,6 +4,7 @@
 
 1. `yarn hardhat compile`
 2. `yarn hardhat deploy`
+3. `yarn hardhat run scripts/fund.js --network localhost` to fund the contract on your localhost
 
 ## Additional Notes, Tips, and Tricks
 
