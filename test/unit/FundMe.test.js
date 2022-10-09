@@ -12,8 +12,8 @@ describe("FundMe", async function () {
          * const accounts = await ethers.getSigners()
          * const accountZero = accounts[0]
          */
-
         await deployments.fixture(["all"])
+
         // Gets the most recently deployed contract
         fundMe = await ethers.getContract("FundMe", deployer)
         mockV3Aggregator = await ethers.getContract(

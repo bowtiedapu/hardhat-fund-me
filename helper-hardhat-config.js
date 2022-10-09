@@ -1,6 +1,6 @@
 const networkConfig = {
     31337: {
-        name: "localhost",
+        name: "hardhat",
     },
     5: {
         name: "goerli",

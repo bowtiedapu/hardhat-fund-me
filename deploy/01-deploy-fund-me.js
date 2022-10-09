@@ -29,7 +29,7 @@ module.exports = async (hre) => {
         from: deployer,
         args: args,
         log: true,
-        waitConfirmations: network.config.blockConfirmations || 5,
+        waitConfirmations: network.config.blockConfirmations || 1,
     })
 
     if (!devChains.includes(network.name) && process.env.ETHERSCAN_API_KEY) {
