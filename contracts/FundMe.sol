@@ -16,8 +16,8 @@ error FundMe__NotOwner();
 contract FundMe {
     using PriceConverter for uint256;
 
-    mapping(address => uint256) public addressToAmountFunded;
-    address[] public funders;
+    mapping(address => uint256) private s_addressToAmountFunded;
+    address[] private s_funders;
 
     /**
      * Some more information on keywords:
@@ -26,18 +26,27 @@ contract FundMe {
      *
      * Both constant and immutable does not reserve a storage spot for variables market constant or immutable
      */
-    address public immutable i_owner;
+    address private immutable i_owner;
 
     // This won't change after compile time, so we can mark this as `constant`, which will also optimize our gas usage
-    uint256 public constant MINIMUM_USD = 50 * 10**18;
+    uint256 private constant MINIMUM_USD = 50 * 10**18;
 
     /**
      * Whenever we have these global variables i.e. uint256 favoriteNumber;
      * These are stuck in storage. Each slot is 32 bytes long, and represents the bytes version of the object
-     * Storage is a gian array/list of all variables we create, and associated with this contract.
-     * A dynamic value like mappings or dynamic arrays are stored using a hashin function.
+     * Storage is a giant array/list of all variables we create, and associated with this contract. Every single variable/value is slotted into
+     * a 32 bytes-long slot. Every time another global variable is created, it takes up another storage slot.
+     *
+     * A dynamic value like mappings or dynamic arrays are stored using a hashing function.
      * For arrays, a sequential storage spot is taken up for the length of the array. For mappings, a sequential sotrage
      * spot is taken up, but left blank.
+     * To take a concrete example of this, if we create an array, only the array's length is stored in storage. If we place a value within this array,
+     * the hashing function (keccak256) is called to get the location of where the aforementioned value should be held in storage. If think about this
+     * from a fundamental CS perspective, this makes sense as we do NOT want to store each value in adjacent entries to the array's length in storage.
+     * For mappings, a sequential storage spot is taken up, but is blank. For more information, check out:
+     * https://docs.soliditylang.org/en/v0.8.17/internals/layout_in_storage.html#mappings-and-dynamic-arrays
+     *
+     *
      * Constant variables are part of the contract's bytecode, and is not stored in strage; it's just a pointer to a value
      * Memory variables are deleted after the function has finished running.
      *
@@ -46,7 +55,7 @@ contract FundMe {
      * Prepend "s_" to show that a variable is storage variable
      */
 
-    AggregatorV3Interface public priceFeed;
+    AggregatorV3Interface private s_priceFeed;
 
     /**
      * A modifier is a keyword to modify a function definition.
@@ -79,7 +88,7 @@ contract FundMe {
 
     constructor(address priceFeedAddress) {
         i_owner = msg.sender;
-        priceFeed = AggregatorV3Interface(priceFeedAddress);
+        s_priceFeed = AggregatorV3Interface(priceFeedAddress);
     }
 
     /**
@@ -87,11 +96,11 @@ contract FundMe {
      */
     function fund() public payable {
         require(
-            msg.value.getConversionRate(priceFeed) >= MINIMUM_USD,
+            msg.value.getConversionRate(s_priceFeed) >= MINIMUM_USD,
             "You need to spend more ETH!"
         );
-        addressToAmountFunded[msg.sender] += msg.value;
-        funders.push(msg.sender);
+        s_addressToAmountFunded[msg.sender] += msg.value;
+        s_funders.push(msg.sender);
     }
 
     /**
@@ -104,11 +113,11 @@ contract FundMe {
          */
         for (
             uint256 funderIndex = 0;
-            funderIndex < funders.length;
+            funderIndex < s_funders.length;
             funderIndex++
         ) {
-            address funder = funders[funderIndex];
-            addressToAmountFunded[funder] = 0;
+            address funder = s_funders[funderIndex];
+            s_addressToAmountFunded[funder] = 0;
         }
         /**
          * For more info, look at https://solidity-by-example.org/sending-ether
@@ -126,10 +135,46 @@ contract FundMe {
          * If send fails, we wouldn't revert the txn, so we want to add a require statement so that we revert.
          * If call returns a value, its stored in the bytes object, which is an array. If it fails, we need to use require as well to revert successfully
          */
-        funders = new address[](0);
+        s_funders = new address[](0);
         (bool callSuccess, ) = payable(msg.sender).call{
             value: address(this).balance
         }("");
         require(callSuccess, "Call failed");
+    }
+
+    function gasOptimizedWithdraw() public payable onlyOwner {
+        // Memory is much cheaper, but keep in mind that mappings can't be in memory
+        address[] memory funders = s_funders;
+
+        for (uint256 i = 0; i < funders.length; i++) {
+            address funder = funders[i];
+            s_addressToAmountFunded[funder] = 0;
+        }
+
+        s_funders = new address[](0);
+        (bool success, ) = payable(msg.sender).call{
+            value: address(this).balance
+        }("");
+        require(success);
+    }
+
+    function getOwner() public view returns (address) {
+        return i_owner;
+    }
+
+    function getFunder(uint256 index) public view returns (address) {
+        return s_funders[index];
+    }
+
+    function getAddressToAmountFunded(address funder)
+        public
+        view
+        returns (uint256)
+    {
+        return s_addressToAmountFunded[funder];
+    }
+
+    function getPriceFeed() public view returns (AggregatorV3Interface) {
+        return s_priceFeed;
     }
 }
